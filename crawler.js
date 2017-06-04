@@ -8,10 +8,10 @@ const maxRequest = 20;
 const secureSleepTime = 120000; // 2min
 let requestCounter = 0;
 
-const searchPhrase = <SEARCH_PHRASE>;
+const searchPhrase = "solarium";
 const startUrl = "https://panoramafirm.pl/"+ searchPhrase;
 
-const makeRequest = function(url, pause = false) {
+(function makeRequest(url, pause = false) {
     if (pause === true) {
         requestCounter = 0;
     } else {
@@ -24,17 +24,30 @@ const makeRequest = function(url, pause = false) {
         resolveWithFullResponse: true
     }).then(function (response) {
         if (response.statusCode === 200) {
-            return processBody(response.body);
+            const nextUrl = processBody(response.body);
+
+            if (nextUrl != null) {
+                console.log('Next site to parse: ', nextUrl);
+
+                if (maxRequest === requestCounter) {
+                    console.log('Sleep for: ', secureSleepTime, 'ms');
+                    setTimeout(makeRequest, secureSleepTime, nextUrl, true);
+                } else {
+                    setTimeout(makeRequest, 5000, nextUrl);
+                }
+
+            } else {
+                console.log('No sites to parse.');
+            }
+
         } else {
             console.log('Other status: ', response.statusCode);
-            process.exit(0);
+            process.exit(1); // exit with failure code
         }
-    }).then(function (dataObj) {
-        writeToFile(dataObj);
     }).catch(function (error) {
         console.log('Error: ', error);
     });
-};
+})(startUrl);
 
 function processBody(body) {
     const $ = cheerio.load(body, {
@@ -57,20 +70,8 @@ function processBody(body) {
 
     });
 
-    if (nextUrl != null) {
-        console.log('Next site to parse: ', nextUrl);
-
-        if (maxRequest === requestCounter) {
-            console.log('Sleep for: ', secureSleepTime, 'ms');
-            setTimeout(makeRequest, secureSleepTime, nextUrl, true);
-        } else {
-            setTimeout(makeRequest, 5000, nextUrl);
-        }
-
-    } else {
-        console.log('No sites to parse.');
-    }
-    return dataArray;
+    writeToFile(dataArray);
+    return nextUrl;
 };
 
 function normalizeString(rawString) {
@@ -93,5 +94,3 @@ function writeToFile(dataObj) {
         fs.appendFileSync('./result_data.csv', `"${dataObj[i].key}","${dataObj[i].value}"\n`);
     }
 }
-
-makeRequest(startUrl);
